@@ -1,0 +1,78 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// SQLite tidak mendukung enum native Prisma, jadi "plan" disimpan sebagai
+// String dan divalidasi lewat union type TypeScript (lihat src/lib/plans.ts).
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  plan         String   @default("FREE")
+  createdAt    DateTime @default(now())
+
+  apiKeys  ApiKey[]
+  invoices Invoice[]
+}
+
+model ApiKey {
+  id        String    @id @default(cuid())
+  keyHash   String    @unique
+  keyPrefix String
+  name      String
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  usages       MonthlyUsage[]
+  requestLogs  RequestLog[]
+
+  @@index([userId])
+}
+
+model MonthlyUsage {
+  id        String @id @default(cuid())
+  apiKeyId  String
+  apiKey    ApiKey @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  yearMonth String
+  count     Int    @default(0)
+
+  @@unique([apiKeyId, yearMonth])
+}
+
+model RequestLog {
+  id         String   @id @default(cuid())
+  apiKeyId   String
+  apiKey     ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  path       String
+  statusCode Int
+  createdAt  DateTime @default(now())
+
+  @@index([apiKeyId, createdAt])
+}
+
+model Invoice {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id])
+  yearMonth        String
+  plan             String
+  totalRequests    Int
+  includedRequests Int
+  overageRequests  Int
+  baseCost         Int
+  overageCost      Int
+  totalCost        Int
+  generatedAt      DateTime @default(now())
+
+  @@unique([userId, yearMonth])
+}
